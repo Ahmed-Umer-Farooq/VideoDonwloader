@@ -1,0 +1,9 @@
+2025-10-24 02:22:04,510 - __main__ - INFO - Starting download for youtube: https://youtube.com/shorts/ZAEkjkXB88I?si=miO6CZrQGvK0gqkp
+2025-10-24 02:22:20,210 - __main__ - INFO - Metadata saved to C:\Users\PMLS\Downloads\VideoDownloader\youtube\SHE IS TRYING TO MIMIC ME   scout funny shorts\metadata.txt
+2025-10-24 02:22:20,211 - __main__ - INFO - Successfully downloaded: SHE IS TRYING TO MIMIC ME   scout funny shorts
+2025-10-24 02:39:31,994 - __main__ - INFO - Fetching info for youtube: https://youtube.com/shorts/F3qR9A08KDo?si=4ydTu2fzbDH05FA3
+2025-10-24 02:44:48,842 - __main__ - INFO - Processing youtube: https://youtube.com/shorts/F3qR9A08KDo?si=4ydTu2fzbDH05FA3
+2025-10-24 02:44:54,294 - __main__ - ERROR - Error: '>' not supported between instances of 'NoneType' and 'int'
+2025-10-24 02:45:04,374 - __main__ - INFO - Processing youtube: https://youtube.com/shorts/F3qR9A08KDo?si=4ydTu2fzbDH05FA3
+2025-10-24 02:45:09,769 - __main__ - ERROR - Error: '>' not supported between instances of 'NoneType' and 'int'
+2025-10-24 02:46:51,392 - __main__ - INFO - Processing youtube: https://youtube.com/shorts/F3qR9A08KDo?si=4ydTu2fzbDH05FA3
