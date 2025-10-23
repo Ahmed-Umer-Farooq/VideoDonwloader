@@ -1,17 +1,16 @@
 #!/usr/bin/env python3
 """
 Video Downloader Pro - Simple & Easy to Use
-Download videos directly to your device - No technical knowledge needed!
-Version: 2.0.0
+Downloads videos directly - No complicated steps!
+Version: 3.0.0
 """
 
 import streamlit as st
 import yt_dlp
 from fake_useragent import UserAgent
-import time
+import tempfile
+import os
 import logging
-import base64
-from io import BytesIO
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -24,12 +23,6 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed"
 )
-
-# Configuration
-class Config:
-    VERSION = "2.0.0"
-    MAX_FILE_SIZE = 100 * 1024 * 1024  # 100MB for in-memory download
-    TIMEOUT = 30
 
 def get_random_user_agent():
     """Get a random user agent"""
@@ -72,21 +65,41 @@ def validate_url(url, platform_name):
     
     return True, "OK"
 
-def get_video_info_and_file(url, platform_name, progress_callback=None):
-    """Get video info and download link"""
+def download_video(url, platform_name, progress_callback=None):
+    """Download video and return file data"""
     try:
-        logger.info(f"Processing {platform_name}: {url}")
+        logger.info(f"Downloading {platform_name}: {url}")
         
         if progress_callback:
-            progress_callback("Getting video information...")
+            progress_callback("🔍 Getting video information...")
         
-        # Get video info
+        # Create temp directory
+        temp_dir = tempfile.mkdtemp()
+        
+        # Progress hook
+        last_progress = [0]
+        
+        def progress_hook(d):
+            if d['status'] == 'downloading' and progress_callback:
+                try:
+                    percent_str = d.get('_percent_str', '0%').strip()
+                    if percent_str != f"{last_progress[0]}%":
+                        progress_callback(f"⬇️ Downloading: {percent_str}")
+                        last_progress[0] = int(float(percent_str.replace('%', '')))
+                except:
+                    pass
+            elif d['status'] == 'finished' and progress_callback:
+                progress_callback("✅ Processing video...")
+        
+        # Download options
         ydl_opts = {
+            "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+            "outtmpl": os.path.join(temp_dir, "video.%(ext)s"),
             "quiet": True,
             "no_warnings": True,
-            "skip_download": True,
+            "progress_hooks": [progress_hook],
             "user_agent": get_random_user_agent(),
-            "format": "best[ext=mp4]/bestvideo[ext=mp4]+bestaudio[ext=m4a]/best",
+            "merge_output_format": "mp4",
         }
         
         if platform_name == "tiktok":
@@ -95,68 +108,62 @@ def get_video_info_and_file(url, platform_name, progress_callback=None):
                 "Referer": "https://www.tiktok.com/",
             }
         
+        # Extract info first
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=False)
-        
-        if not info:
-            return False, None, "Could not get video information"
-        
-        title = info.get("title", "video")
-        duration = info.get("duration", 0)
-        thumbnail = info.get("thumbnail")
-        uploader = info.get("uploader", "Unknown")
-        
-        # Get the best download URL
-        download_url = None
-        estimated_size = 0
-        
-        # Try to get direct URL
-        if info.get("url"):
-            download_url = info.get("url")
-            estimated_size = info.get("filesize") or info.get("filesize_approx") or 0
-        else:
-            # Look through formats for best quality
+            
+            title = info.get("title", "video")
+            duration = info.get("duration", 0)
+            thumbnail = info.get("thumbnail")
+            uploader = info.get("uploader", "Unknown")
+            
+            # Get estimated file size
             formats = info.get("formats", [])
-            best_format = None
-            best_quality = 0
-            
+            estimated_size = 0
             for fmt in formats:
-                # Prefer mp4 formats with both video and audio
-                if fmt.get("ext") == "mp4":
-                    height = fmt.get("height", 0)
-                    has_video = fmt.get("vcodec", "none") != "none"
-                    has_audio = fmt.get("acodec", "none") != "none"
-                    
-                    if has_video and has_audio and height > best_quality:
-                        best_quality = height
-                        best_format = fmt
-            
-            # If no combined format, get best video
-            if not best_format:
-                for fmt in formats:
-                    if fmt.get("vcodec", "none") != "none":
-                        height = fmt.get("height", 0)
-                        if height > best_quality:
-                            best_quality = height
-                            best_format = fmt
-            
-            if best_format:
-                download_url = best_format.get("url")
-                estimated_size = best_format.get("filesize") or best_format.get("filesize_approx") or 0
-        
-        if not download_url:
-            return False, None, "Could not find download link for this video"
+                size = fmt.get("filesize") or fmt.get("filesize_approx", 0)
+                if size > estimated_size:
+                    estimated_size = size
         
         if progress_callback:
-            progress_callback("Ready to download!")
+            progress_callback(f"⬇️ Downloading: {title}")
+        
+        # Now download
+        with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+            ydl.download([url])
+        
+        # Find the downloaded file
+        video_file = None
+        for file in os.listdir(temp_dir):
+            if file.startswith("video."):
+                video_file = os.path.join(temp_dir, file)
+                break
+        
+        if not video_file or not os.path.exists(video_file):
+            return False, None, "Download failed - file not found"
+        
+        # Read file into memory
+        if progress_callback:
+            progress_callback("📦 Preparing download...")
+        
+        with open(video_file, 'rb') as f:
+            video_data = f.read()
+        
+        # Clean up
+        try:
+            os.remove(video_file)
+            os.rmdir(temp_dir)
+        except:
+            pass
         
         return True, {
             "title": title,
             "duration": duration,
             "thumbnail": thumbnail,
             "uploader": uploader,
-            "size": estimated_size,
-            "download_url": download_url
+            "size": len(video_data),
+            "data": video_data,
+            "filename": f"{title}.mp4"
         }, None
         
     except Exception as e:
@@ -287,16 +294,17 @@ def apply_styles():
             background: linear-gradient(135deg, #00C853, #00E676) !important;
             color: white !important;
             border: none !important;
-            border-radius: 10px !important;
-            padding: 1rem 2rem !important;
+            border-radius: 12px !important;
+            padding: 1.2rem 2rem !important;
             font-weight: 700 !important;
-            font-size: 1.1rem !important;
+            font-size: 1.2rem !important;
             width: 100% !important;
+            box-shadow: 0 8px 20px rgba(0,200,83,0.3) !important;
         }
         
         .stDownloadButton > button:hover {
-            transform: translateY(-2px) !important;
-            box-shadow: 0 10px 30px rgba(0, 200, 83, 0.3) !important;
+            transform: translateY(-3px) !important;
+            box-shadow: 0 12px 30px rgba(0,200,83,0.4) !important;
         }
         
         h2, h3 {
@@ -308,14 +316,6 @@ def apply_styles():
             font-size: 1.1rem;
             line-height: 1.6;
             color: #ccc;
-        }
-        
-        .highlight {
-            background: rgba(255, 0, 0, 0.1);
-            padding: 0.2rem 0.6rem;
-            border-radius: 6px;
-            color: #FF6B6B;
-            font-weight: 600;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -333,12 +333,12 @@ def render_tab(platform_name, platform_icon, platform_title):
     # Simple instructions
     st.markdown("""
         <div class="info-card">
-            <h3 style="margin-top: 0;">How to use:</h3>
+            <h3 style="margin-top: 0;">📝 How to use:</h3>
             <p class="big-text">
                 1️⃣ Copy the video URL from YouTube or TikTok<br>
                 2️⃣ Paste it in the box below<br>
                 3️⃣ Click "Download Video"<br>
-                4️⃣ Wait a few seconds and your video will download!
+                4️⃣ Wait for processing and click the green download button!
             </p>
         </div>
     """, unsafe_allow_html=True)
@@ -364,89 +364,80 @@ def render_tab(platform_name, platform_icon, platform_title):
             return
         
         # Show progress
-        with st.spinner("🔍 Getting video information..."):
-            progress_placeholder = st.empty()
-            
-            def update_progress(msg):
-                progress_placeholder.info(msg)
-            
-            success, video_info, error = get_video_info_and_file(
-                url_input, 
-                platform_name,
-                progress_callback=update_progress
-            )
-            
-            progress_placeholder.empty()
+        progress_placeholder = st.empty()
+        
+        def update_progress(msg):
+            progress_placeholder.info(msg)
+        
+        success, video_data, error = download_video(
+            url_input, 
+            platform_name,
+            progress_callback=update_progress
+        )
+        
+        progress_placeholder.empty()
         
         if not success:
-            st.error(f"❌ Couldn't download this video. Error: {error}")
-            st.info("💡 Tip: Make sure the video is public and not age-restricted")
+            st.error(f"❌ Couldn't download this video")
+            st.error(f"Error: {error}")
+            st.info("💡 Tips:\n- Make sure the video is public\n- Check if the URL is correct\n- Try a different video")
             return
         
         # Show video info
         st.markdown(f"""
             <div class="video-card">
-                <h2 style="margin-top: 0; font-size: 1.5rem;">✅ {video_info['title']}</h2>
+                <h2 style="margin-top: 0; font-size: 1.5rem;">✅ {video_data['title']}</h2>
                 <p style="color: #888; margin: 0.5rem 0;">
-                    👤 {video_info['uploader']} • 
-                    ⏱️ {format_duration(video_info['duration'])} • 
-                    💾 {format_size(video_info['size'])}
+                    👤 {video_data['uploader']} • 
+                    ⏱️ {format_duration(video_data['duration'])} • 
+                    💾 {format_size(video_data['size'])}
                 </p>
             </div>
         """, unsafe_allow_html=True)
         
         # Show thumbnail
-        if video_info.get('thumbnail'):
-            st.image(video_info['thumbnail'], use_container_width=True)
+        if video_data.get('thumbnail'):
+            st.image(video_data['thumbnail'], use_container_width=True)
         
         st.markdown("<br>", unsafe_allow_html=True)
         
-        # Download button
-        if video_info.get('download_url'):
-            st.markdown(f"""
-                <a href="{video_info['download_url']}" download="{video_info['title']}.mp4" target="_blank">
-                    <button style="
-                        background: linear-gradient(135deg, #00C853, #00E676);
-                        color: white;
-                        border: none;
-                        border-radius: 10px;
-                        padding: 1rem 2rem;
-                        font-weight: 700;
-                        font-size: 1.1rem;
-                        width: 100%;
-                        cursor: pointer;
-                        transition: all 0.3s;
-                    ">
-                        ⬇️ CLICK HERE TO DOWNLOAD
-                    </button>
-                </a>
-            """, unsafe_allow_html=True)
-            
-            st.success("✅ Click the green button above to download your video!")
-        else:
-            st.error("❌ Couldn't generate download link. Please try again.")
+        # Create download button with actual file
+        st.success("✅ Your video is ready! Click the button below to download:")
+        
+        st.download_button(
+            label="⬇️ DOWNLOAD VIDEO NOW",
+            data=video_data['data'],
+            file_name=video_data['filename'],
+            mime="video/mp4",
+            use_container_width=True
+        )
+        
+        st.balloons()
     
     # Help section
     with st.expander("ℹ️ Need Help?"):
         st.markdown("""
             **Common Issues:**
             
+            • **Download takes too long?**  
+              → Large videos take more time, please be patient
+            
             • **Video won't download?**  
               → Make sure the video is public and not age-restricted
             
-            • **Download button doesn't work?**  
-              → Right-click the button and select "Save link as..."
-            
-            • **Video is too large?**  
-              → Large videos (>100MB) will open in a new tab for download
-            
-            • **Still having problems?**  
+            • **Error message appears?**  
               → Try a different video or check your internet connection
+            
+            • **Downloaded file won't play?**  
+              → Make sure you have a media player installed (VLC recommended)
         """)
 
 def main():
     """Main app"""
     apply_styles()
+    
+    # Warning about Streamlit Cloud limitations
+    st.info("ℹ️ **Note:** This app works best when run locally. On Streamlit Cloud, video size may be limited.")
     
     # Create tabs
     tab1, tab2 = st.tabs(["🎥 YouTube", "🎵 TikTok"])
@@ -460,7 +451,7 @@ def main():
     # Footer
     st.markdown("""
         <div style="text-align: center; padding: 2rem 0; color: #666; margin-top: 3rem; border-top: 1px solid rgba(255,255,255,0.1);">
-            Video Downloader Pro • Simple & Easy<br>
+            Video Downloader Pro v3.0 • Simple & Easy<br>
             For personal use only
         </div>
     """, unsafe_allow_html=True)
