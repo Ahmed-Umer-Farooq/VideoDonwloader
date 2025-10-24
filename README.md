@@ -25,3 +25,49 @@ A simple and easy-to-use **Streamlit web application** for downloading videos fr
    cd VideoDonwloader
   pip install -r requirements.txt
   streamlit run App.py
+  
+**💡 USAGE:**
+Open the app in your browser (or click the Live Demo link)
+Choose between YouTube or TikTok tab
+Paste the video URL in the input field
+Click “Download Video”
+Wait for the video information to load
+Click the Download button to save the video
+
+**🛠 Requirements**
+
+Python 3.7+
+
+Streamlit
+
+yt-dlp
+
+fake-useragent
+
+**☁️ Deployment (Streamlit Cloud)**
+
+This app is ready for deployment on Streamlit Cloud:
+
+Fork this repository
+
+Go to share.streamlit.io
+
+Connect your GitHub account
+
+Select this repository
+
+Deploy! 🚀
+
+**⚠️ Important Notes**
+
+For personal use only
+
+Respect copyright laws and platform terms of service
+
+Some videos may not be downloadable due to restrictions
+
+Large videos (>100MB) will open in a new tab for download
+
+📜 License
+
+This project is for educational purposes only.
